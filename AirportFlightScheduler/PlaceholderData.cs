@@ -1,4 +1,4 @@
-﻿namespace AirportFlightScheduler.GenChain1;
+﻿namespace AirportFlightScheduler;
 
 public static class PlaceholderData
 {

@@ -1,8 +1,7 @@
 ﻿using AirportFlightScheduler.Data;
 using Microsoft.EntityFrameworkCore;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
-namespace AirportFlightScheduler.GenChain1;
+namespace AirportFlightScheduler;
 
 public class FlightDataGenerator
 {
@@ -28,7 +27,7 @@ public class FlightDataGenerator
     private async Task GenerateSingleDay(int numProducts)
     {
         // Data Generation Chain 1
-        
+
         List<int> scheduledFlightIds = await GenerateScheduledFlights();
         Console.Write("1");
         List<int> flightHistoryIds = await GenerateFlightHistory(scheduledFlightIds);

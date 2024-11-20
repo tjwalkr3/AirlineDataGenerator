@@ -2,7 +2,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using AirportFlightScheduler.Data;
-using AirportFlightScheduler.GenChain1;
+
+namespace AirportFlightScheduler;
 
 public class Program
 {
