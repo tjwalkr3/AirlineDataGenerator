@@ -27,7 +27,7 @@ public class FlightDataGenerator
     private async Task GenerateSingleDay(int numProducts)
     {
         // Data Generation Chain 1
-
+        // SeatType -> PlaneTypeSeatType -> PlaneType -> (Airport, Plane) -> ScheduledFlight -> FlightHistory -> Reservation -> (Seat, Payment)
         List<int> scheduledFlightIds = await GenerateScheduledFlights();
         Console.Write("1");
         List<int> flightHistoryIds = await GenerateFlightHistory(scheduledFlightIds);
@@ -40,6 +40,7 @@ public class FlightDataGenerator
         Console.Write("5");
 
         // Data Generation Chain 2 (A LOT SIMPLER)
+        // Reservation -> (Seat, Payment) -> ConcessionPurchase -> ConcessionPurchaseProduct <- Product
         await GenerateConcessionPurchases(seatIds, numProducts);
         Console.Write("6\n");
     }
