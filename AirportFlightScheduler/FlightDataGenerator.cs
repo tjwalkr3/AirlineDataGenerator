@@ -1,15 +1,17 @@
 ﻿using AirportFlightScheduler.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AirportFlightScheduler;
 
 public class FlightDataGenerator
 {
-    private AirlineContext _context;
+    private AirlineContext _context = new();
+    private DbContextOptions<AirlineContext> _contextOptions;
 
-    public FlightDataGenerator(AirlineContext context)
+    public FlightDataGenerator(DbContextOptions<AirlineContext> contextOptions)
     {
-        _context = context;
+        _contextOptions = contextOptions;
     }
 
     // Iterate through the data generations functions a set number of times
@@ -17,9 +19,11 @@ public class FlightDataGenerator
     {
         for (int i = 0; i < iterations; i++)
         {
-            Console.Write("\nCompleted Phase: ");
-            await GenerateSingleDay(numProducts);
-            Console.WriteLine($"Done with day: {i + 1}/{iterations}");
+            using (_context = new AirlineContext(_contextOptions))
+            {
+                await GenerateSingleDay(numProducts);
+                Console.WriteLine($"Done with day: {i + 1}/{iterations}");
+            }
         }
     }
 

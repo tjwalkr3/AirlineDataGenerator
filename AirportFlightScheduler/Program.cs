@@ -10,15 +10,15 @@ public class Program
     static async Task Main(string[] args)
     {
         AirlineContext context;
+        DbContextOptions<AirlineContext> options;
 
         //Initialize DBContext object
         try
         {
             var configuration = new ConfigurationBuilder().AddUserSecrets<Program>().Build();
             var connectionString = configuration.GetConnectionString("DefaultConnection");
-            var options = new DbContextOptionsBuilder<AirlineContext>().UseNpgsql(connectionString).Options;
-            context = new AirlineContext(options);
-            Console.WriteLine($"DBContext successfully created with connection string: \n{connectionString}\n");
+            options = new DbContextOptionsBuilder<AirlineContext>().UseNpgsql(connectionString).Options;
+            Console.WriteLine($"DBContext successfully created new options with connection string: \n{connectionString}\n");
         }
         catch (Exception ex)
         {
@@ -30,8 +30,8 @@ public class Program
         string DataGenChain = GetValidInput(new List<string> { "1" }, prompt: "Press 1 then [ENTER] to generate data!");
 
         Console.WriteLine("Generating data...");
-        FlightDataGenerator generator = new(context);
-        await generator.GenerateData(1, 3);
+        FlightDataGenerator generator = new(options);
+        await generator.GenerateData(15, 3);
         Console.WriteLine("Done.");
     }
 
