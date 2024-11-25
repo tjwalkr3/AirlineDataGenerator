@@ -1,5 +1,5 @@
 -- Key Feature #1
--- Gets each flight, how many have booked it, the max capacity, and its scheduled arrival and departure timestamps
+-- This query gets each flight, how many have booked it, the max capacity, and its scheduled arrival and departure timestamps
 with plane_capacities as (
 	select p.id as plane_id, sum(ptst.quantity) as plane_capacity
 	from plane p
@@ -27,9 +27,114 @@ inner join passenger_counts pcts
 on (pc.plane_id = pcts.plane_id)
 order by pcts.scheduled_flight_id asc;
 
+-- Key Feature #2
+-- This query gets the number of printed boarding passes, reservations, and the plane's capacit.
+-- The number of printed boarding passes never exceeds the plane's capacity, and each reservations can have multiple boarding passes (seats).
+select count(s.id) as printed_boarding_pass,
+	count() as reservations
+from seat s
+left join reservation r
+on (s.reservation_id = r.id)
+where s.printed_boarding_pass_at is not null;
+
+-- Key Feature #2
+-- This query gets each flight, how many have booked it, the max capacity, and its scheduled arrival and departure timestamps.
+with plane_capacities as (
+	select p.id as plane_id, sum(ptst.quantity) as plane_capacity
+	from plane p
+	inner join plane_type pt 
+	on (p.plane_type_id = pt.id)
+	inner join plane_type_seat_type ptst 
+	on (ptst.plane_type_id = pt.id)
+	group by p.id
+),
+reservation_counts as (
+	select sf.id as scheduled_flight_id, sf.plane_id, sf.departure_time, sf.arrival_time, count(*) as reservation_count
+	from scheduled_flight sf 
+	inner join reservation r
+	on (sf.id = r.scheduled_flight_id)
+	group by sf.id, sf.plane_id, sf.departure_time, sf.arrival_time
+),
+occupied as (
+	select sf.id, count(*) as printed_boarding_pass
+	from reservation r
+	inner join seat s
+	on (r.id = s.reservation_id)
+	inner join scheduled_flight sf 
+	on (r.scheduled_flight_id = sf.id)
+	where s.printed_boarding_pass_at is not null
+	group by sf.id
+)
+select pcts.scheduled_flight_id, 
+	pc.plane_capacity, 
+	o.printed_boarding_passes,
+	pcts.reservation_count
+from plane_capacities pc
+inner join reservation_counts pcts
+on (pc.plane_id = pcts.plane_id)
+inner join occupied o
+on (pcts.scheduled_flight_id = o.id)
+order by pcts.scheduled_flight_id asc;
+
+-- Key Feature #3
+-- Gets the total percentage of all seats sold, and the total percentage of passengers that have been refunded
+with total_seats as (
+    select pt.plane_name,
+           ptst.plane_type_id,
+           sum(ptst.quantity) as num_seats 
+    from airline_booking2.plane_type_seat_type ptst
+    inner join airline_booking2.seat_type st
+        on (ptst.seat_type_id = st.id)
+    inner join airline_booking2.plane_type pt
+        on (ptst.plane_type_id = pt.id)
+    group by pt.plane_name, ptst.plane_type_id
+), seats_booked as (
+    select p.plane_type_id,
+           sf.id as flight_id,
+           count(*) as num_booked
+    from airline_booking2.seat s
+    inner join airline_booking2.reservation r
+        on (s.reservation_id = r.id)
+    inner join airline_booking2.scheduled_flight sf 
+        on (r.scheduled_flight_id = sf.id)
+    inner join airline_booking2.plane p 
+        on (sf.plane_id = p.id)
+    where s.printed_boarding_pass_at is not null
+    group by p.plane_type_id, sf.id
+), overbooked_paid as (
+    select sf.id as flight_id,
+           count(*) as overbooked_paid_out
+    from airline_booking2.reservation r
+    inner join airline_booking2.scheduled_flight sf 
+        on (r.scheduled_flight_id = sf.id)
+    inner join airline_booking2.payment pay
+        on (r.id = pay.reservation_id and pay.amount < 0) -- Negative payment indicates compensation
+    group by sf.id
+)
+select 
+    coalesce(
+        cast(sum(coalesce(sb.num_booked, 0)) as decimal(15,5)) 
+        / cast(sum(ts.num_seats) as decimal(15,5)) * 100, 
+        0
+    ) as percent_seats_sold,
+    coalesce(
+        cast(sum(coalesce(op.overbooked_paid_out, 0)) as decimal(15,5)) 
+        / cast(sum(coalesce(sb.num_booked, 0)) as decimal(15,5)) * 100, 
+        0
+    ) as percent_passengers_refunded
+from airline_booking2.scheduled_flight sf
+inner join airline_booking2.plane p
+    on (sf.plane_id = p.id)
+inner join total_seats ts
+    on (ts.plane_type_id = p.plane_type_id)
+left join seats_booked sb
+    on (sf.id = sb.flight_id)
+left join overbooked_paid op
+    on (sf.id = op.flight_id);
+
 -- Key Feature #4
 -- Flight Performance Efficiency function
--- calculates percentages based on the flights that have been canceled
+-- Calculates percentages based on the flights that have been canceled.
 create or replace function flight_performance_efficiency() returns table(percent_flights_on_time decimal(10,6), percent_flights_canceled decimal(10,6)) as $$
 	begin
 	return query with flight_counts as (
@@ -84,44 +189,3 @@ $$ language plpgsql;
 
 select * from flight_estimate('08-21-24');
 
--- flight continuity procedure
--- tracks whether scheduled flights are from airport to airport
--- logs when a plane "teleports" to another airport without flying
-CREATE OR REPLACE PROCEDURE flight_continuity ()
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    current_row RECORD;
-    -- Variable to hold each row during iteration
-    last_row RECORD;
-    -- Variable to store the last row
-BEGIN
-    FOR current_row IN
-    SELECT
-        id,
-        departure_airport_id,
-        arrival_airport_id,
-        plane_id
-    FROM
-        airline_booking2.scheduled_flight
-    ORDER BY
-        plane_id ASC,
-        departure_time ASC -- Ensure rows are processed in a defined order
-        LOOP
-            -- If last_row is not null, perform the comparison
-            IF last_row IS NOT NULL THEN
-                IF last_row.arrival_airport_id = current_row.departure_airport_id THEN
-                    --RAISE NOTICE 'Row continuity check passed: Plane ID=%, Last Arrival=%, Current Departure=%', last_row.plane_id, last_row.arrival_airport_id, current_row.departure_airport_id;
-                ELSIF last_row.plane_id != current_row.plane_id THEN
-                    --RAISE NOTICE 'Row continuity check passed: new plane: Plane ID=%, Departure=%', last_row.plane_id, current_row.departure_airport_id;
-                ELSE
-                    RAISE WARNING 'Row continuity check failed: Flight ID=%, Last Arrival=%, Current Departure=%', current_row.id, last_row.arrival_airport_id, current_row.departure_airport_id;
-                END IF;
-            END IF;
-            -- Update last_row to hold the current_row for the next iteration
-            last_row := current_row;
-        END LOOP;
-END;
-$$;
-
-CALL flight_continuity();
