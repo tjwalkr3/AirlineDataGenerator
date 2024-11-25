@@ -28,16 +28,6 @@ on (pc.plane_id = pcts.plane_id)
 order by pcts.scheduled_flight_id asc;
 
 -- Key Feature #2
--- This query gets the number of printed boarding passes, reservations, and the plane's capacit.
--- The number of printed boarding passes never exceeds the plane's capacity, and each reservations can have multiple boarding passes (seats).
-select count(s.id) as printed_boarding_pass,
-	count() as reservations
-from seat s
-left join reservation r
-on (s.reservation_id = r.id)
-where s.printed_boarding_pass_at is not null;
-
--- Key Feature #2
 -- This query gets each flight, how many have booked it, the max capacity, and its scheduled arrival and departure timestamps.
 with plane_capacities as (
 	select p.id as plane_id, sum(ptst.quantity) as plane_capacity
@@ -67,7 +57,7 @@ occupied as (
 )
 select pcts.scheduled_flight_id, 
 	pc.plane_capacity, 
-	o.printed_boarding_passes,
+	o.printed_boarding_pass,
 	pcts.reservation_count
 from plane_capacities pc
 inner join reservation_counts pcts
@@ -188,4 +178,3 @@ end;
 $$ language plpgsql;
 
 select * from flight_estimate('08-21-24');
-
